@@ -1,0 +1,65 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: modeldeployments.mlflow.org
+spec:
+  group: mlflow.org
+  names:
+    categories: []
+    kind: ModelDeployment
+    plural: modeldeployments
+    shortNames: []
+    singular: modeldeployment
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns: []
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for ModelDeploymentSpec via `CustomResource`
+        properties:
+          spec:
+            properties:
+              image_pull_secrets:
+                items:
+                  description: LocalObjectReference contains enough information to let you locate the referenced object inside the same namespace.
+                  properties:
+                    name:
+                      description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names'
+                      type: string
+                  type: object
+                nullable: true
+                type: array
+              mlflow:
+                properties:
+                  tracking_server_storage_secret:
+                    type: string
+                  tracking_server_url:
+                    type: string
+                required:
+                - tracking_server_storage_secret
+                - tracking_server_url
+                type: object
+              model:
+                properties:
+                  name:
+                    type: string
+                  version:
+                    format: uint16
+                    minimum: 0.0
+                    type: integer
+                required:
+                - name
+                - version
+                type: object
+            required:
+            - mlflow
+            - model
+            type: object
+        required:
+        - spec
+        title: ModelDeployment
+        type: object
+    served: true
+    storage: true
+    subresources: {}

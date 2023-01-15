@@ -1,0 +1,8 @@
+name: identity-model
+dependencies:
+  - python=3.10
+  - numpy
+  - pip
+  - pip:
+    - mlflow==2.1.1
+    - boto3==1.26.45

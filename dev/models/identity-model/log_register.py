@@ -40,8 +40,8 @@ def log_model(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--tracking-uri")
-    parser.add_argument("--s3-endpoint")
+    parser.add_argument("--tracking-uri", default="http://localhost:32002")
+    parser.add_argument("--s3-endpoint", default="http://localhost:32000")
 
     os.environ["AWS_SHARED_CREDENTIALS_FILE"] = os.path.join(os.path.dirname(__file__), "credentials")
 

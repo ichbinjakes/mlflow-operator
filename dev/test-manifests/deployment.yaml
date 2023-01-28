@@ -1,0 +1,12 @@
+apiVersion: mlflow.org/v1alpha1
+kind: ModelDeployment
+metadata:
+  name: test
+  namespace: mlflow
+spec:
+  mlflow:
+    tracking_server_url: http://mlflow:5000
+    tracking_server_storage_secret: mlflow-artifacts-credentials
+  model:
+    name: identity-model
+    version: 1

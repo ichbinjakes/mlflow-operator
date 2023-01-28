@@ -1,0 +1,13 @@
+image:
+  repository: k3d-mlflow-registry.localhost:12000/mlflow-operator/mlflow-operator
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+
+resources: {}
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi

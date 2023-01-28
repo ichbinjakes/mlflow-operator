@@ -16,7 +16,7 @@ spec:
         app: mlflow
     spec:
       containers:
-        - image: localhost:32000/mlflow:latest
+        - image: k3d-mlflow-registry.localhost:12000/mlflow-operator/mlflow:latest
           args:
             - --host=0.0.0.0
             - --port=5000
@@ -54,5 +54,5 @@ spec:
     - name: http
       targetPort: http
       port: 5000
-      nodePort: 32001
+      nodePort: 32002
   type: NodePort

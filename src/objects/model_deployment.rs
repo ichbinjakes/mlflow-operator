@@ -7,6 +7,8 @@ use kube::api::PostParams;
 use kube::{Api, Client, CustomResource, Error};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, JsonSchema)]
 pub struct MlflowConfig {
@@ -43,19 +45,41 @@ pub async fn apply_model_deployment(
     model_deployment: ModelDeployment,
 ) -> Result<apps_v1::Deployment, Error> {
     let deployment_api: Api<apps_v1::Deployment> = Api::namespaced(client, namespace);
-    let deployment: apps_v1::Deployment = create_model_deployment_deployment(model_deployment);
+    let deployment: apps_v1::Deployment = create_deployment_spec(model_deployment);
     deployment_api
         .create(&PostParams::default(), &deployment)
         .await
 }
 
-fn create_model_deployment_deployment(model_deployment: ModelDeployment) -> apps_v1::Deployment {
+fn insert_uuid_for_deployment(mut deployment: apps_v1::Deployment, uuid: Uuid) -> apps_v1::Deployment {
+    let mut labels: BTreeMap<String, String> = deployment.metadata.labels.clone().unwrap();
+    labels.insert("mlflow-operator-uuid".to_owned(), uuid.clone().to_string());
+
+    deployment.metadata.labels = Some(labels);
+    deployment
+}
+
+fn insert_uuid_for_service(uuid: Uuid) {
+
+}
+
+fn insert_uuid_for_pod_template(mut pod_template_spec: core_v1::PodTemplateSpec, uuid: Uuid) -> core_v1::PodTemplateSpec {
+    let mut labels: BTreeMap<String, String> = pod_template_spec.metadata.clone().unwrap().labels.clone().unwrap();
+    labels.insert("mlflow-operator-uuid".to_owned(), uuid.clone().to_string());
+
+    let mut metadata = pod_template_spec.metadata.clone().unwrap();
+    metadata.labels = Some(labels);
+    pod_template_spec.metadata = Some(metadata);
+    pod_template_spec
+}
+
+fn create_deployment_spec(model_deployment: ModelDeployment) -> apps_v1::Deployment {
 
     let name: String = model_deployment.metadata.name.unwrap();
 
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
     labels.insert("app".to_owned(), name.clone());
-
+    
     let model_uri: String = format!(
         "models:/{}/{}",
         model_deployment.spec.model.name, model_deployment.spec.model.version
@@ -128,4 +152,85 @@ fn create_model_deployment_deployment(model_deployment: ModelDeployment) -> apps
         ..apps_v1::Deployment::default()
     };
     deployment
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_model_deployment() {
+        let model_deployment: ModelDeployment = ModelDeployment {
+            metadata: ObjectMeta { 
+                name: Some(String::from("test-deployment")), 
+                namespace: Some(String::from("test-namespace")),
+                ..ObjectMeta::default()
+            },
+            spec: ModelDeploymentSpec { 
+                image_pull_secrets: None, 
+                mlflow: MlflowConfig { 
+                    tracking_server_url: String::from("http://test-mlflow"), 
+                    tracking_server_storage_secret: String::from("mlflow-storage-credentials") }, 
+                model: ModelConfig { 
+                    name: String::from("test-model"), version: 1 
+                } 
+            }
+        };
+        
+        let document: &str = "
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: test-deployment
+          namespace: test-namespace
+          labels:
+            app: test-deployment
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: test-deployment
+          template:
+            metadata:
+              labels:
+                app: test-deployment
+            spec:
+              containers:
+              - name: model-server
+                args:
+                - mlflow
+                - models
+                - serve
+                - --enable-mlserver
+                - --host
+                - 0.0.0.0
+                - --port
+                - 8080
+                - --model-uri
+                - models:/test-model/1
+                env:
+                  - name: MLFLOW_TRACKING_URI
+                    value: http://test-mlflow
+                envFrom:
+                  - secretRef:
+                      name: mlflow-storage-credentials
+                      optional: false
+                image: localhost:32000/mlflow:latest
+                ports:
+                - containerPort: 8080";
+
+        let kubernetes_deployment: apps_v1::Deployment = create_deployment_spec(model_deployment);
+        let check_deployment: apps_v1::Deployment = match serde_yaml::from_str(document) {
+            Ok(result) => result,
+            Err(_) => panic!()
+        };
+
+        println!("{:?\n\n}", kubernetes_deployment);
+        println!("{:?\n\n}", check_deployment);
+        
+        assert_eq!(kubernetes_deployment, check_deployment);
+
+
+    }
 }

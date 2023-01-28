@@ -44,7 +44,26 @@ async fn reconcile(
     deployment: Arc<model_deployment::ModelDeployment>,
     context: Arc<ContextData>,
 ) -> Result<Action, Error> {
+    println!("Reconciling: {:?}", deployment);
+    let action_type: CRDAction = determine_action(&deployment);
+    match action_type {
+        CRDAction::Create => println!("CREATE"),
+        CRDAction::Delete => println!("DELETE"),
+        CRDAction::Update => println!("UPDATE"),
+        CRDAction::NoOp => println!("NO-OP"),
+    }
     Ok(Action::requeue(Duration::from_secs(10)))
+}
+
+fn determine_action(deployment: &model_deployment::ModelDeployment) -> CRDAction {
+    if !deployment.metadata.labels.clone().unwrap().contains_key("mlflow-operator-uid") {
+        // Operator has not yet added its tracking uuid
+        return CRDAction::Create
+    }
+    match deployment.metadata.deletion_timestamp.clone() {
+        Some(_) => CRDAction::Create,
+        None => CRDAction::NoOp
+    }
 }
 
 fn on_error(
@@ -63,4 +82,5 @@ pub enum CRDAction {
     Create,
     Update,
     Delete,
+    NoOp,
 }

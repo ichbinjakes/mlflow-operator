@@ -9,7 +9,7 @@ build:
 build-dev:
 		docker build \
 			-t k3d-mlflow-registry.localhost:12000/mlflow-operator/mlflow-operator:dev \
-			-f dev/operator.dev.Dockerfile \
+			-f dev/dev.Dockerfile \
 			.
 		docker push k3d-mlflow-registry.localhost:12000/mlflow-operator/mlflow-operator:dev
 
@@ -29,3 +29,7 @@ build-mlflow:
 
 create-model-env:
 		conda env update -f dev/models/identity-model/conda-env.yaml
+
+
+apply-model-deployment:
+		kubectl apply -f dev/test-manifests/identity-model-create.yaml

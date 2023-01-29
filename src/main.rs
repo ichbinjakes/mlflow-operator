@@ -1,8 +1,11 @@
 use std::sync::Arc;
+use std::env;
 
 use kube::{
     api::ListParams, client::Client, runtime::controller::Action, runtime::Controller, Api,
 };
+
+use k8s_openapi::api::apps::v1 as apps_v1;
 use tokio::time::Duration;
 use thiserror::Error;
 use futures::StreamExt;
@@ -15,10 +18,18 @@ async fn main() {
         .await
         .expect("Expected a valid KUBECONFIG environment variable.");
 
-    let crd_api: Api<model_deployment::ModelDeployment> = Api::all(k8s_client.clone());
     let context: Arc<ContextData> = Arc::new(ContextData::new(k8s_client.clone()));
 
-    Controller::new(crd_api.clone(), ListParams::default())
+    let namespace: String = match env::var("MY_POD_NAMESPACE") {
+        Ok(env_var) => env_var,
+        Err(_) => panic!("MY_POD_NAMESPACE environment variable was not set.")
+    };
+
+    let model_deployments = Api::<model_deployment::ModelDeployment>::namespaced(k8s_client.clone(), &namespace);
+    let k8s_deployments = Api::<apps_v1::Deployment>::namespaced(k8s_client.clone(), &namespace);
+
+    Controller::new(model_deployments, ListParams::default())
+        .owns(k8s_deployments, ListParams::default())
         .run(reconcile, on_error, context)
         .for_each(|result| async move {
             match result {
@@ -47,22 +58,38 @@ async fn reconcile(
     println!("Reconciling: {:?}", deployment);
     let action_type: CRDAction = determine_action(&deployment);
     match action_type {
-        CRDAction::Create => println!("CREATE"),
+        CRDAction::Create => {
+            println!("Creating Model Deployment...");
+            match model_deployment::apply_model_deployment(
+                context.client.clone(), (*deployment).clone()
+            ).await {
+                Ok(_) => println!("SUCCESS"),
+                Err(e) => println!("{:?}", e)
+            };
+        },
         CRDAction::Delete => println!("DELETE"),
         CRDAction::Update => println!("UPDATE"),
         CRDAction::NoOp => println!("NO-OP"),
     }
-    Ok(Action::requeue(Duration::from_secs(10)))
+    Ok(Action::requeue(Duration::from_secs(60)))
 }
 
 fn determine_action(deployment: &model_deployment::ModelDeployment) -> CRDAction {
-    if !deployment.metadata.labels.clone().unwrap().contains_key("mlflow-operator-uid") {
-        // Operator has not yet added its tracking uuid
-        return CRDAction::Create
-    }
     match deployment.metadata.deletion_timestamp.clone() {
         Some(_) => CRDAction::Create,
-        None => CRDAction::NoOp
+        None => {
+            match &deployment.metadata.labels {
+                Some(val) => {
+                    if !val.contains_key("mlflow-operator-uid") {
+                        return CRDAction::Create
+                    }
+                },
+                None => {
+                    return CRDAction::Create
+                }
+            }
+            CRDAction::NoOp
+        }
     }
 }
 

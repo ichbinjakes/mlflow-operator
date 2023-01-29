@@ -1,10 +1,11 @@
 use std::collections::BTreeMap;
+use std::env;
 
 use k8s_openapi::api::apps::v1 as apps_v1;
 use k8s_openapi::api::core::v1 as core_v1;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::{LabelSelector, ObjectMeta};
-use kube::api::PostParams;
-use kube::{Api, Client, CustomResource, Error};
+use kube::api::{Patch, PatchParams, PostParams};
+use kube::{Api, Client, CustomResource, Error, Resource, ResourceExt};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -41,14 +42,39 @@ pub struct ModelDeploymentSpec {
 
 pub async fn apply_model_deployment(
     client: Client,
-    namespace: &str,
     model_deployment: ModelDeployment,
 ) -> Result<apps_v1::Deployment, Error> {
-    let deployment_api: Api<apps_v1::Deployment> = Api::namespaced(client, namespace);
+    
+    let namespace = match model_deployment.namespace() {
+        Some(namespace) => namespace,
+        None => panic!("No namespace on model deployment")
+    };
+
+    let name = model_deployment.name_any();
+
+    let deployment_api: Api<apps_v1::Deployment> = Api::namespaced(client, &namespace);
+
     let deployment: apps_v1::Deployment = create_deployment_spec(model_deployment);
-    deployment_api
-        .create(&PostParams::default(), &deployment)
-        .await
+    // deployment = insert_uuid_for_deployment(deployment, Uuid::new_v4()); 
+    
+    // let new_status = Patch::Apply(json!({
+    //     "apiVersion": "kube.rs/v1",
+    //     "kind": "Document",
+    //     "status": DocumentStatus {
+    //         hidden: should_hide,
+    //     }
+    // }));
+    
+
+    // deployment_api
+    //     .create(&PostParams::default(), &deployment)
+    //     .await
+
+    deployment_api.patch(
+        &name,
+        &PatchParams::apply("mlflow-operator"),
+        &Patch::Apply(&deployment),
+    ).await
 }
 
 fn insert_uuid_for_deployment(mut deployment: apps_v1::Deployment, uuid: Uuid) -> apps_v1::Deployment {
@@ -59,21 +85,30 @@ fn insert_uuid_for_deployment(mut deployment: apps_v1::Deployment, uuid: Uuid) -
     deployment
 }
 
-fn insert_uuid_for_service(uuid: Uuid) {
-
+fn get_mlflow_image_name() -> String {
+    match env::var("DEFAULT_MODEL_IMAGE") {
+        Ok(env_var) => env_var,
+        Err(_) => panic!("`DEFAULT_MODEL_IMAGE` environment variable was not set.")
+    }
 }
 
-fn insert_uuid_for_pod_template(mut pod_template_spec: core_v1::PodTemplateSpec, uuid: Uuid) -> core_v1::PodTemplateSpec {
-    let mut labels: BTreeMap<String, String> = pod_template_spec.metadata.clone().unwrap().labels.clone().unwrap();
-    labels.insert("mlflow-operator-uuid".to_owned(), uuid.clone().to_string());
+// fn insert_uuid_for_service(uuid: Uuid) {
 
-    let mut metadata = pod_template_spec.metadata.clone().unwrap();
-    metadata.labels = Some(labels);
-    pod_template_spec.metadata = Some(metadata);
-    pod_template_spec
-}
+// }
+
+// fn insert_uuid_for_pod_template(mut pod_template_spec: core_v1::PodTemplateSpec, uuid: Uuid) -> core_v1::PodTemplateSpec {
+//     let mut labels: BTreeMap<String, String> = pod_template_spec.metadata.clone().unwrap().labels.clone().unwrap();
+//     labels.insert("mlflow-operator-uuid".to_owned(), uuid.clone().to_string());
+
+//     let mut metadata = pod_template_spec.metadata.clone().unwrap();
+//     metadata.labels = Some(labels);
+//     pod_template_spec.metadata = Some(metadata);
+//     pod_template_spec
+// }
 
 fn create_deployment_spec(model_deployment: ModelDeployment) -> apps_v1::Deployment {
+
+    let oref = model_deployment.controller_owner_ref(&()).unwrap();
 
     let name: String = model_deployment.metadata.name.unwrap();
 
@@ -90,6 +125,7 @@ fn create_deployment_spec(model_deployment: ModelDeployment) -> apps_v1::Deploym
             name: Some(name),
             namespace: Some(model_deployment.metadata.namespace.unwrap()),
             labels: Some(labels.clone()),
+            owner_references: Some(vec![oref]),
             ..ObjectMeta::default()
         },
         spec: Some(apps_v1::DeploymentSpec {
@@ -110,8 +146,8 @@ fn create_deployment_spec(model_deployment: ModelDeployment) -> apps_v1::Deploym
                         // TODO: volume_mounts, image_pull_policy, readiness_probe,
                         // TODO: startup_probe, security_context
                         name: String::from("model-server"),
-                        image: Some(String::from("localhost:32000/mlflow:latest")),
-                        args: Some(vec![
+                        image: Some(get_mlflow_image_name()),
+                        command: Some(vec![
                             "mlflow".to_string(),
                             "models".to_string(),
                             "serve".to_string(),

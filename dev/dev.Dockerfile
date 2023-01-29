@@ -1,6 +1,8 @@
 FROM rust:latest as builder
-# RUN cargo new --bin mlflow-operator
+RUN cargo new mlflow-operator
 WORKDIR /mlflow-operator
+COPY Cargo.toml .
+RUN cp ./src/main.rs ./src/crdgen.rs && cargo build
 COPY . ./
 RUN cargo build
 

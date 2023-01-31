@@ -10,7 +10,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq, JsonSchema)]
 pub struct MlflowConfig {
     pub tracking_server_url: String,
@@ -44,10 +43,9 @@ pub async fn apply_model_deployment(
     client: Client,
     model_deployment: ModelDeployment,
 ) -> Result<apps_v1::Deployment, Error> {
-    
     let namespace = match model_deployment.namespace() {
         Some(namespace) => namespace,
-        None => panic!("No namespace on model deployment")
+        None => panic!("No namespace on model deployment"),
     };
 
     let name = model_deployment.name_any();
@@ -55,8 +53,8 @@ pub async fn apply_model_deployment(
     let deployment_api: Api<apps_v1::Deployment> = Api::namespaced(client, &namespace);
 
     let deployment: apps_v1::Deployment = create_deployment_spec(model_deployment);
-    // deployment = insert_uuid_for_deployment(deployment, Uuid::new_v4()); 
-    
+    // deployment = insert_uuid_for_deployment(deployment, Uuid::new_v4());
+
     // let new_status = Patch::Apply(json!({
     //     "apiVersion": "kube.rs/v1",
     //     "kind": "Document",
@@ -64,20 +62,24 @@ pub async fn apply_model_deployment(
     //         hidden: should_hide,
     //     }
     // }));
-    
 
     // deployment_api
     //     .create(&PostParams::default(), &deployment)
     //     .await
 
-    deployment_api.patch(
-        &name,
-        &PatchParams::apply("mlflow-operator"),
-        &Patch::Apply(&deployment),
-    ).await
+    deployment_api
+        .patch(
+            &name,
+            &PatchParams::apply("mlflow-operator"),
+            &Patch::Apply(&deployment),
+        )
+        .await
 }
 
-fn insert_uuid_for_deployment(mut deployment: apps_v1::Deployment, uuid: Uuid) -> apps_v1::Deployment {
+fn insert_uuid_for_deployment(
+    mut deployment: apps_v1::Deployment,
+    uuid: Uuid,
+) -> apps_v1::Deployment {
     let mut labels: BTreeMap<String, String> = deployment.metadata.labels.clone().unwrap();
     labels.insert("mlflow-operator-uuid".to_owned(), uuid.clone().to_string());
 
@@ -88,7 +90,7 @@ fn insert_uuid_for_deployment(mut deployment: apps_v1::Deployment, uuid: Uuid) -
 fn get_mlflow_image_name() -> String {
     match env::var("DEFAULT_MODEL_IMAGE") {
         Ok(env_var) => env_var,
-        Err(_) => panic!("`DEFAULT_MODEL_IMAGE` environment variable was not set.")
+        Err(_) => panic!("`DEFAULT_MODEL_IMAGE` environment variable was not set."),
     }
 }
 
@@ -107,14 +109,13 @@ fn get_mlflow_image_name() -> String {
 // }
 
 fn create_deployment_spec(model_deployment: ModelDeployment) -> apps_v1::Deployment {
-
     let oref = model_deployment.controller_owner_ref(&()).unwrap();
 
     let name: String = model_deployment.metadata.name.unwrap();
 
     let mut labels: BTreeMap<String, String> = BTreeMap::new();
     labels.insert("app".to_owned(), name.clone());
-    
+
     let model_uri: String = format!(
         "models:/{}/{}",
         model_deployment.spec.model.name, model_deployment.spec.model.version
@@ -190,7 +191,6 @@ fn create_deployment_spec(model_deployment: ModelDeployment) -> apps_v1::Deploym
     deployment
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,22 +198,24 @@ mod tests {
     #[test]
     fn test_create_model_deployment() {
         let model_deployment: ModelDeployment = ModelDeployment {
-            metadata: ObjectMeta { 
-                name: Some(String::from("test-deployment")), 
+            metadata: ObjectMeta {
+                name: Some(String::from("test-deployment")),
                 namespace: Some(String::from("test-namespace")),
                 ..ObjectMeta::default()
             },
-            spec: ModelDeploymentSpec { 
-                image_pull_secrets: None, 
-                mlflow: MlflowConfig { 
-                    tracking_server_url: String::from("http://test-mlflow"), 
-                    tracking_server_storage_secret: String::from("mlflow-storage-credentials") }, 
-                model: ModelConfig { 
-                    name: String::from("test-model"), version: 1 
-                } 
-            }
+            spec: ModelDeploymentSpec {
+                image_pull_secrets: None,
+                mlflow: MlflowConfig {
+                    tracking_server_url: String::from("http://test-mlflow"),
+                    tracking_server_storage_secret: String::from("mlflow-storage-credentials"),
+                },
+                model: ModelConfig {
+                    name: String::from("test-model"),
+                    version: 1,
+                },
+            },
         };
-        
+
         let document: &str = "
         apiVersion: apps/v1
         kind: Deployment
@@ -259,14 +261,12 @@ mod tests {
         let kubernetes_deployment: apps_v1::Deployment = create_deployment_spec(model_deployment);
         let check_deployment: apps_v1::Deployment = match serde_yaml::from_str(document) {
             Ok(result) => result,
-            Err(_) => panic!()
+            Err(_) => panic!(),
         };
 
         println!("{:?\n\n}", kubernetes_deployment);
         println!("{:?\n\n}", check_deployment);
-        
+
         assert_eq!(kubernetes_deployment, check_deployment);
-
-
     }
 }

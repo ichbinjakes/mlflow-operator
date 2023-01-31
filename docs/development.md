@@ -11,42 +11,41 @@
 - /src
   - Source code for the operator and CRDs
 
-### Development cluster
+## Development cluster setup
 
-When developing the mlflow-operator I set up a test cluster using microk8s. The following plugins need to be enabled:
-- dns
-- helm3
-- hostpath-storage
-- registry
+The `dev` directory contains bash scripts and manifests for deploying a local dev cluster using (k3d)[https://k3d.io]. There are also scripts for deploying a `mlflow` tracking server, a standalone `minio` cluster for model storage, and the `mlflow-operator`.
 
-The development cluster will also need:
-- minio-operator
-- minio-tenant
-- mlflow
+### Prequisites
 
-Setting up minio can be done using `dev/kubernetes/minio/apply.sh`. Access the console with `kubectl -n minio-operator port-forward svc/console 9090:9090`
+1. [docker](https://www.docker.com/)
+2. [k3d](https://k3d.io)
+3. [helm](https://helm.sh/)
+4. [kubectl](https://kubernetes.io/docs/tasks/tools/)
+5. [tilt](https://tilt.dev/)
 
-To setup mlflow:
-1. Build the image with `make build-mlflow`, this will also push to microk8s' registry
-2. Deploy the server with `kubectl apply -f dev/kubernetes/mlflow/deployment.yaml`
+### Steps
 
+Depending on your system config, you may need to run these commands with sudo
 
-### Test model
+1. Deploy a k3d cluster. This step will override an existing `~/.kube/config` file.
+   - `bash dev/kubernetes/setup.sh`
+2. Build and push the mlflow image. This will push to the registry created in step 1.
+   - `make build-mlflow`
+3. Install minio.
+   - `bash dev/kubernetes/minio/apply.sh`
+4. Deploy mlflow tracking server.
+   - `bash dev/kubernetes/mlflow/apply.sh`
 
-One role of mlflow-operator is to deploy models, for that we need a test model. There is a test model in `dev/models/identity-model`. This model outputs the input.
+You should now have a local cluster for development purposes. If `kubectl get pods -A` can't connect to the server try running `HOME=$HOME sudo k3d kubeconfig get mlflow > $HOME/.kube/config`
 
-To log the model to mlflow:
-1. Create a python env: `make conda-identity-model`
-2. Activate the environment: `conda activate identity-model`
-3. Log the model:
-```
-python \
-    dev/models/identity-model/log_register.py \
-    --tracking-uri=http://localhost:32001 \
-    --s3-endpoint=http://localhost:32002
-```
+## Development workflow
 
+Development testing requires the operator to be install and a RegisteredModel in the mlflow tracking server.
 
-### Developing
+### Steps:
 
-.... tilt.dev ... blah
+1. Build the operator image and deploy it run.
+   - `tilt up`
+2. Log a model and register it.
+   - `bash dev/models/log_register.py`
+3. Develop

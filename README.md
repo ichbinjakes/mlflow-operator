@@ -17,7 +17,8 @@ mlflow-operator is a kubernetes operator to make it simple to deploy RegisteredM
 ## Roadmap
 
 1. initial release
-   - Documentation (installation, usage, development)
+   - Change api kind?
+   - CI for docker image
    - Wait for mlflow [fix](https://github.com/mlflow/mlflow/issues/7645)
    - Wait for mlflow server images
    - Logging

@@ -13,7 +13,7 @@
 
 ## Development cluster setup
 
-The `dev` directory contains bash scripts and manifests for deploying a local dev cluster using (k3d)[https://k3d.io]. There are also scripts for deploying a `mlflow` tracking server, a standalone `minio` cluster for model storage, and the `mlflow-operator`.
+The `dev` directory contains bash scripts and manifests for deploying a local dev cluster using [k3d](https://k3d.io). There are also scripts for deploying a `mlflow` tracking server, a standalone `minio` cluster for model storage, and the `mlflow-operator`.
 
 ### Prequisites
 
